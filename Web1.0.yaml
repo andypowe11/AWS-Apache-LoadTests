@@ -1,0 +1,411 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploys 4x web/email instances for WEG-Nonlive"
+
+Mappings:
+  AWSRegionServerAMI:
+    "eu-west-1":
+      "CentOS7x8664withUpdatesHVM": "ami-061b1560"
+    "eu-west-2":
+      "CentOS7x8664withUpdatesHVM": "ami-e05a4d84"
+
+Parameters:
+  000NetworkStackName:
+    Description: "Name of an active CloudFormation stack that contains
+    the networking resources, such as the subnet and security groups,
+    that will be used in this stack."
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: "WEG-NonLive-Basic-VPC"
+
+  005DataStackName:
+    Description: "Name of an active CloudFormation stack that contains
+    the data resources, such as the EFS and RDS instances that will be
+    used in this stack."
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: "WEG-NonLive-Data"
+
+  010WebKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Key pair to associate with the Web instances"
+
+  020WebInstanceType:
+    Type: String
+    Description: "Web instance sizing"
+    Default: "t2.micro"
+
+  030WebDistroName:
+    Type: String
+    Description: "Name of Linux distro to users"
+    Default: "CentOS7x8664withUpdatesHVM"
+
+  040WebDiskSize:
+    Type: String
+    Description: "Size of disks to deploy for the Web servers (GB)"
+    Default: "60"
+
+  050MountPoint:
+    Type: String
+    Description: "EFS mount point for shared content"
+    Default: "/srv"
+
+  060EnvironmentName:
+    # Would be better to import this but CloudFormation seems unable to use imported values to set conditionals
+    Type: String
+    Description: "An environment name that will be prefixed to resource names i.e prod, stg, dev"
+    Default: "stg"
+
+Conditions:
+  #ProductionEnvironment : !Equals [ "Fn::ImportValue": { "Fn::Sub": "${000NetworkStackName}-EnvironmentName" }, "prod" ]
+  #StagingEnvironment : !Equals [ "Fn::ImportValue": { "Fn::Sub": "${000NetworkStackName}-EnvironmentName" }, "stg" ]
+  #DevelopmentEnvironment : !Equals [ "Fn::ImportValue": { "Fn::Sub": "${000NetworkStackName}-EnvironmentName" }, "dev" ]
+  ProductionEnvironment : !Equals [ !Ref 060EnvironmentName, "prod" ]
+  StagingEnvironment : !Equals [ !Ref 060EnvironmentName, "stg" ]
+  DevelopmentEnvironment : !Equals [ !Ref 060EnvironmentName, "dev" ]
+
+Resources:
+
+# Web Servers
+  wegawlwebs01:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize:
+              Ref: 040WebDiskSize
+            VolumeType: "gp2"
+      DisableApiTermination: "false"
+      InstanceInitiatedShutdownBehavior: "stop"
+      ImageId: !FindInMap [AWSRegionServerAMI, !Ref "AWS::Region", !Ref 030WebDistroName]
+      InstanceType:
+        Ref: 020WebInstanceType
+      KeyName:
+        Ref: 010WebKeyPair
+      Monitoring: "true"
+      Tags:
+        - Key: "Name"
+          Value: "weg-awl-web-s01"
+        - Key: "Owner"
+          Value: "Warwick Employment Group"
+        - Key: "Power"
+          Value: "dev"
+        - Key: "Project"
+          Value: "Warwick Employment Group CCI Migration"
+        - Key: "Customer Environment"
+          Value: "STG"
+        - Key: "Patch Group"
+          Value: "Stg-A"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-PrivateSubnet1"
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            Fn::Sub: "${000NetworkStackName}-WebSecurityGroup"
+      IamInstanceProfile:
+        Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-SystemsManagerRole"
+      UserData:
+        Fn::Base64:
+          Fn::Join: [ "", [
+            "#!/bin/bash\n",
+            "yum -y update\n",
+            "# Restart Apache\n",
+            "service httpd restart\n",
+            "# end\n",
+            "touch /tmp/user-data-completed\n"
+          ] ]
+
+
+  wegawlwebs02:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize:
+              Ref: 040WebDiskSize
+            VolumeType: "gp2"
+      DisableApiTermination: "false"
+      InstanceInitiatedShutdownBehavior: "stop"
+      ImageId: !FindInMap [AWSRegionServerAMI, !Ref "AWS::Region", !Ref 030WebDistroName]
+      InstanceType:
+        Ref: 020WebInstanceType
+      KeyName:
+        Ref: 010WebKeyPair
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value: "weg-awl-web-s02"
+        - Key: "Owner"
+          Value: "Warwick Employment Group"
+        - Key: "Power"
+          Value: "dev"
+        - Key: "Project"
+          Value: "Warwick Employment Group CCI Migration"
+        - Key: "Customer Environment"
+          Value: "STG"
+        - Key: "Patch Group"
+          Value: "Stg-B"
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-PrivateSubnet2"
+      SecurityGroupIds:
+        - Fn::ImportValue:
+            Fn::Sub: "${000NetworkStackName}-WebSecurityGroup"
+      IamInstanceProfile:
+        Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-SystemsManagerRole"
+      UserData:
+        Fn::Base64:
+          Fn::Join: [ "", [
+            "#!/bin/bash\n",
+            "yum -y update\n",
+            "# Restart Apache\n",
+            "service httpd restart\n",
+            "# end\n",
+            "touch /tmp/user-data-completed\n"
+          ] ]
+
+# ELB
+
+  WebELBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: "forward"
+        TargetGroupArn:
+          Ref: WebELBTargetGroup
+      LoadBalancerArn:
+        Ref: WebApplicationLoadBalancer
+      Port: "80"
+      Protocol: "HTTP"
+      #SslPolicy:
+
+  WebApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: "internet-facing"
+      Subnets:
+      - Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-PublicSubnet1"
+      - Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-PublicSubnet2"
+      LoadBalancerAttributes:
+        - Key: "access_logs.s3.enabled"
+          Value: "true"
+        - Key: "access_logs.s3.bucket"
+          Value: "weg-nonlive-elb-logs"
+        - Key: "access_logs.s3.prefix"
+          Value:
+            Fn::Sub: "${000NetworkStackName}/web-elb"
+        - Key: "idle_timeout.timeout_seconds"
+          Value: "60"
+      SecurityGroups:
+      - Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}-WebFESecurityGroup"
+      Tags:
+      - Key: "Name"
+        Value: "weg-awl-web-elb"
+      - Key: "Owner"
+        Value: "Warwick Employment Group"
+      - Key: "Project"
+        Value: "Warwick Employment Group CCI Migration"
+      - Key: "Customer Environment"
+        Value: "STG"
+
+  WebELBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 10
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: "200"
+      HealthCheckPath: /
+      Name: WebELBTargetGroup
+      Port: "80"
+      Protocol: HTTP
+      Targets:
+      - Id:
+          Ref: wegawlwebs01
+        Port: "80"
+      - Id:
+          Ref: wegawlwebs02
+        Port: "80"
+      Tags:
+      - Key: "Name"
+        Value: "WebELBTargetGroup"
+      - Key: "Owner"
+        Value: "Warwick Employment Group"
+      - Key: "Project"
+        Value: "Warwick Employment Group CCI Migration"
+      - Key: "Customer Environment"
+        Value: "STG"
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${000NetworkStackName}"
+
+# Private DNS names
+
+  PrivateDNSwegawlwebs01:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${000NetworkStackName}-PrivateDNSZone"
+      Name:
+        !Join [ ".", [ "weg-awl-web-s01", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
+      Type: "A"
+      TTL: "60"
+      ResourceRecords:
+      - !GetAtt wegawlwebs01.PrivateIp
+
+  PrivateDNSwegawlwebs02:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${000NetworkStackName}-PrivateDNSZone"
+      Name:
+        !Join [ ".", [ "weg-awl-web-s02", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
+      Type: "A"
+      TTL: "60"
+      ResourceRecords:
+      - !GetAtt wegawlwebs02.PrivateIp
+
+  PrivateDNSwegawlwebs03:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${000NetworkStackName}-PrivateDNSZone"
+      Name:
+        !Join [ ".", [ "weg-awl-web-s03", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
+      Type: "A"
+      TTL: "60"
+      ResourceRecords:
+      - !GetAtt wegawlwebs03.PrivateIp
+
+  PrivateDNSwegawlwebs04:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${000NetworkStackName}-PrivateDNSZone"
+      Name:
+        !Join [ ".", [ "weg-awl-web-s04", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
+      Type: "A"
+      TTL: "60"
+      ResourceRecords:
+      - !GetAtt wegawlwebs04.PrivateIp
+
+  PrivateDNSwegawlelbweb:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub "${000NetworkStackName}-PrivateDNSZone"
+      Name:
+        !Join [ ".", [ "weg-awl-elb-web", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
+      Type: "CNAME"
+      TTL: "60"
+      ResourceRecords:
+      - !GetAtt WebApplicationLoadBalancer.DNSName
+
+# CloudFront
+
+  WebCFDistributionHTTP:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+        - "www.stgaws.jobs.ac.uk"
+        - "stgaws.jobs.ac.uk"
+
+        Enabled: true
+        PriceClass: PriceClass_100
+        DefaultCacheBehavior:
+          TargetOriginId: ELB-WEG-Web
+          ViewerProtocolPolicy: allow-all
+#          MinTTL: 0
+          AllowedMethods:
+          - HEAD
+          - DELETE
+          - POST
+          - GET
+          - OPTIONS
+          - PUT
+          - PATCH
+          CachedMethods:
+          - HEAD
+          - GET
+          ForwardedValues:
+            QueryString: true
+            Headers:
+            - "*"
+            Cookies:
+              Forward: all
+        Logging:
+          Bucket: "weg-nonlive-cloudfront.s3.amazonaws.com"
+          Prefix: "nonlive"
+        Origins:
+        - DomainName: !GetAtt WebApplicationLoadBalancer.DNSName
+          Id: ELB-WEG-Web
+          CustomOriginConfig:
+            HTTPPort: '80'
+            HTTPSPort: '443'
+            OriginProtocolPolicy: http-only
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+  #      SecurityPolicy: TLSv1.1_2016
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:610343508334:certificate/89cb88c4-d170-4b2d-a4ab-320bd67eb1ad
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1
+
+Outputs:
+
+  WebCF:
+    Description: A reference to the created CloudFront distribution
+    Value: !Ref WebCFDistribution
+    Export:
+      Name: !Sub ${AWS::StackName}-WebCF
+
+  WebCFHTTP:
+    Description: A reference to the created HTTP CloudFront distribution
+    Value: !Ref WebCFDistributionHTTP
+    Export:
+      Name: !Sub ${AWS::StackName}-WebCFHTTP
+
+  WebCFDomainName:
+    Description: The CloudFront distribution domain name
+    Value: !GetAtt WebCFDistribution.DomainName
+    Export:
+      Name: !Sub ${AWS::StackName}-WebCFDomainName
+
+  WebCFDomainNameHTTP:
+    Description: The CloudFront distribution domain name
+    Value: !GetAtt WebCFDistributionHTTP.DomainName
+    Export:
+      Name: !Sub ${AWS::StackName}-WebCFDomainNameHTTP
+
+  WebALBZoneID:
+    Description: The web load balancer zone id
+    Value: !GetAtt WebApplicationLoadBalancer.CanonicalHostedZoneID
+    Export:
+      Name: !Sub ${AWS::StackName}-WebALBZoneID
+
+  WebALBDNSName:
+    Description: The web load balancer DNS name
+    Value: !GetAtt WebApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-WebALBDNSName
