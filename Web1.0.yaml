@@ -281,32 +281,6 @@ Resources:
       ResourceRecords:
       - !GetAtt wegawlwebs02.PrivateIp
 
-  PrivateDNSwegawlwebs03:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId:
-        Fn::ImportValue:
-          !Sub "${000NetworkStackName}-PrivateDNSZone"
-      Name:
-        !Join [ ".", [ "weg-awl-web-s03", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
-      Type: "A"
-      TTL: "60"
-      ResourceRecords:
-      - !GetAtt wegawlwebs03.PrivateIp
-
-  PrivateDNSwegawlwebs04:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId:
-        Fn::ImportValue:
-          !Sub "${000NetworkStackName}-PrivateDNSZone"
-      Name:
-        !Join [ ".", [ "weg-awl-web-s04", !Ref 060EnvironmentName, "Fn::ImportValue" : { "Fn::Sub": "${000NetworkStackName}-PrivateDNSSuffix" } ] ]
-      Type: "A"
-      TTL: "60"
-      ResourceRecords:
-      - !GetAtt wegawlwebs04.PrivateIp
-
   PrivateDNSwegawlelbweb:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -322,55 +296,55 @@ Resources:
 
 # CloudFront
 
-  WebCFDistributionHTTP:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Aliases:
-        - "www.stgaws.jobs.ac.uk"
-        - "stgaws.jobs.ac.uk"
-
-        Enabled: true
-        PriceClass: PriceClass_100
-        DefaultCacheBehavior:
-          TargetOriginId: ELB-WEG-Web
-          ViewerProtocolPolicy: allow-all
-#          MinTTL: 0
-          AllowedMethods:
-          - HEAD
-          - DELETE
-          - POST
-          - GET
-          - OPTIONS
-          - PUT
-          - PATCH
-          CachedMethods:
-          - HEAD
-          - GET
-          ForwardedValues:
-            QueryString: true
-            Headers:
-            - "*"
-            Cookies:
-              Forward: all
-        Logging:
-          Bucket: "weg-nonlive-cloudfront.s3.amazonaws.com"
-          Prefix: "nonlive"
-        Origins:
-        - DomainName: !GetAtt WebApplicationLoadBalancer.DNSName
-          Id: ELB-WEG-Web
-          CustomOriginConfig:
-            HTTPPort: '80'
-            HTTPSPort: '443'
-            OriginProtocolPolicy: http-only
-        Restrictions:
-          GeoRestriction:
-            RestrictionType: none
-  #      SecurityPolicy: TLSv1.1_2016
-        ViewerCertificate:
-          AcmCertificateArn: arn:aws:acm:us-east-1:610343508334:certificate/89cb88c4-d170-4b2d-a4ab-320bd67eb1ad
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1
+#   WebCFDistributionHTTP:
+#     Type: AWS::CloudFront::Distribution
+#     Properties:
+#       DistributionConfig:
+#         Aliases:
+#         - "www.stgaws.jobs.ac.uk"
+#         - "stgaws.jobs.ac.uk"
+#
+#         Enabled: true
+#         PriceClass: PriceClass_100
+#         DefaultCacheBehavior:
+#           TargetOriginId: ELB-WEG-Web
+#           ViewerProtocolPolicy: allow-all
+# #          MinTTL: 0
+#           AllowedMethods:
+#           - HEAD
+#           - DELETE
+#           - POST
+#           - GET
+#           - OPTIONS
+#           - PUT
+#           - PATCH
+#           CachedMethods:
+#           - HEAD
+#           - GET
+#           ForwardedValues:
+#             QueryString: true
+#             Headers:
+#             - "*"
+#             Cookies:
+#               Forward: all
+#         Logging:
+#           Bucket: "weg-nonlive-cloudfront.s3.amazonaws.com"
+#           Prefix: "nonlive"
+#         Origins:
+#         - DomainName: !GetAtt WebApplicationLoadBalancer.DNSName
+#           Id: ELB-WEG-Web
+#           CustomOriginConfig:
+#             HTTPPort: '80'
+#             HTTPSPort: '443'
+#             OriginProtocolPolicy: http-only
+#         Restrictions:
+#           GeoRestriction:
+#             RestrictionType: none
+#   #      SecurityPolicy: TLSv1.1_2016
+#         ViewerCertificate:
+#           AcmCertificateArn: arn:aws:acm:us-east-1:610343508334:certificate/89cb88c4-d170-4b2d-a4ab-320bd67eb1ad
+#           SslSupportMethod: sni-only
+#           MinimumProtocolVersion: TLSv1
 
 Outputs:
 
